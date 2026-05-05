@@ -4,77 +4,136 @@ from tensorflow.keras.models import load_model
 import numpy as np
 from PIL import Image
 import io
+import time
 
-# --- Page Configuration ---
+# --- AESTHETIC CONFIGURATION ---
 st.set_page_config(
-    page_title="Portrait to Sketch AI",
+    page_title="Portrait to Sketch Pro",
     page_icon="🎨",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- Model Loading ---
+# Custom CSS for Professional Look
+st.markdown("""
+    <style>
+    /* Dark professional theme */
+    .stApp {
+        background: #0E1117;
+        color: #E0E0E0;
+    }
+    /* Rounded corners for images */
+    img {
+        border-radius: 15px;
+        border: 1px solid #3d4b5c;
+    }
+    /* Button styling */
+    .stButton>button {
+        background-color: #FF4B4B;
+        color: white;
+        border-radius: 20px;
+        border: none;
+        padding: 10px 24px;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #FF2B2B;
+        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.4);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- BACKEND LOGIC ---
 @st.cache_resource
-def load_gen_model():
-    # compile=False is safer for custom GAN models
-    model = load_model('g_model_100.h5', compile=False)
-    return model
+def load_generator():
+    """Load model with resource caching to prevent OOM errors."""
+    try:
+        # Load weights without compiling to save memory
+        model = load_model('g_model_100.h5', compile=False)
+        return model
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
-# --- Updated Image Processing Functions ---
-def preprocess_image(image, target_size=(256, 256)):
-    img = image.resize(target_size)
+def process_image(img_raw):
+    """Refined preprocessing and inference pipeline."""
+    # Preprocessing
+    img = img_raw.resize((256, 256))
     img_array = np.array(img).astype(np.float32)
+    img_array = (img_array - 127.5) / 127.5 # Normalize to [-1, 1]
+    img_array = np.expand_dims(img_array, axis=0)
     
-    # NEW SCALING: Change from [-1, 1] to [0, 1]
-    img_array = img_array / 255.0 
-    
-    return np.expand_dims(img_array, axis=0)
+    # Inference
+    gen = load_generator()
+    if gen:
+        pred = gen.predict(img_array)
+        # Postprocessing: Rescale to [0, 1]
+        rescaled = (pred[0] + 1) / 2.0
+        return np.clip(rescaled, 0, 1)
+    return None
 
-def postprocess_output(prediction):
-    # If we changed input to [0, 1], we should ensure output is handled cleanly
-    # Removing the "+1 / 2" logic if the model was trained on 0-1
-    rescaled = prediction[0] 
-    return np.clip(rescaled, 0, 1)
-
-# --- Main UI Layout ---
-st.title("🎨 Portrait to Sketch AI")
-st.markdown("---")
-
-generator = load_gen_model()
-
+# --- UI INTERFACE ---
 with st.sidebar:
-    st.header("Instructions")
-    st.write("1. Upload a portrait.")
-    st.write("2. Click 'Generate' to see the sketch.")
+    st.image("https://img.icons8.com/clouds/200/art.png", width=100)
+    st.title("AI Artist Studio")
+    st.markdown("---")
+    st.info("**Instructions:** \n1. Upload a portrait. \n2. Ensure the face is clear. \n3. Click 'Generate' to see the magic.")
     st.divider()
-    st.info("Trying New Normalization (0-1 Scaling)")
+    st.caption("v1.2 | Powered by Pix2pix GAN")
 
-uploaded_file = st.file_uploader("Upload your photo", type=["jpg", "png", "jpeg"])
+# Main Content
+st.title("✨ Portrait to Sketch Pro")
+st.write("Professional-grade AI portrait sketching powered by Deep Learning.")
 
-if uploaded_file is not None:
-    col1, col2 = st.columns(2)
-    input_image = Image.open(uploaded_file).convert('RGB')
+uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+
+if uploaded_file:
+    input_img = Image.open(uploaded_file).convert('RGB')
+    
+    col1, col2 = st.columns([1, 1], gap="large")
     
     with col1:
-        st.subheader("Original Portrait")
-        st.image(input_image, use_container_width=True)
-    
-    if st.button("✨ Generate Sketch", use_container_width=True):
-        with st.spinner("AI is re-calculating..."):
-            # Process
-            processed_input = preprocess_image(input_image)
-            prediction = generator.predict(processed_input)
-            final_sketch = postprocess_output(prediction)
+        st.subheader("📷 Original Portrait")
+        st.image(input_img, use_container_width=True)
+        
+    if st.button("✨ GENERATE ARTWORK", use_container_width=True):
+        with st.spinner("Our AI is sketching your features..."):
+            start = time.time()
+            sketch = process_image(input_img)
+            duration = time.time() - start
             
-            with col2:
-                st.subheader("AI Generated Sketch")
-                st.image(final_sketch, use_container_width=True)
-                
-                # Create download buffer
-                result_img = Image.fromarray((final_sketch * 255).astype(np.uint8))
-                buf = io.BytesIO()
-                result_img.save(buf, format="PNG")
-                byte_im = buf.getvalue()
-                
-                st.download_button(label="Download Result", data=byte_im, file_name="sketch_output.png", mime="image/png")
+            if sketch is not None:
+                with col2:
+                    st.subheader("🎨 AI Sketch Output")
+                    st.image(sketch, use_container_width=True)
+                    st.success(f"Generated in {duration:.2f} seconds")
+                    
+                    # Preparation for download
+                    result_pil = Image.fromarray((sketch * 255).astype(np.uint8))
+                    buf = io.BytesIO()
+                    result_pil.save(buf, format="PNG")
+                    st.download_button(
+                        label="⬇️ DOWNLOAD SKETCH",
+                        data=buf.getvalue(),
+                        file_name="ai_portrait_sketch.png",
+                        mime="image/png",
+                        use_container_width=True
+                    )
 else:
-    st.info("Upload an image to test the new scaling.")
+    st.markdown("""
+        <div style="text-align: center; padding: 50px; border: 2px dashed #3d4b5c; border-radius: 20px;">
+            <h3>Drop your photo here to begin</h3>
+            <p>Faces with high contrast and simple backgrounds yield the most artistic results.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+#### 2. Push Update to Git
+Follow these commands to push the professional update:
+
+```bash
+git add app.py
+git commit -m "UI/UX Overhaul: Added professional theme, sidebar, and optimized post-processing"
+git push origin main
+
+Your slide deck and professional app update are ready! I have designed the presentation to be board-room ready, highlighting the technical and artistic success of your project. Let me know if you want to adjust any specific visual details.
