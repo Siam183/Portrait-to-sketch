@@ -61,7 +61,8 @@ def process_image(img_raw):
     # Preprocessing
     img = img_raw.resize((256, 256))
     img_array = np.array(img).astype(np.float32)
-    img_array = (img_array - 127.5) / 127.5 # Normalize to [-1, 1]
+    # Using the math that worked best for your model
+    img_array = (img_array - 127.5) / 127.5 
     img_array = np.expand_dims(img_array, axis=0)
     
     # Inference
@@ -75,7 +76,6 @@ def process_image(img_raw):
 
 # --- UI INTERFACE ---
 with st.sidebar:
-    st.image("https://img.icons8.com/clouds/200/art.png", width=100)
     st.title("AI Artist Studio")
     st.markdown("---")
     st.info("**Instructions:** \n1. Upload a portrait. \n2. Ensure the face is clear. \n3. Click 'Generate' to see the magic.")
@@ -127,13 +127,3 @@ else:
             <p>Faces with high contrast and simple backgrounds yield the most artistic results.</p>
         </div>
     """, unsafe_allow_html=True)
-
-#### 2. Push Update to Git
-Follow these commands to push the professional update:
-
-```bash
-git add app.py
-git commit -m "UI/UX Overhaul: Added professional theme, sidebar, and optimized post-processing"
-git push origin main
-
-Your slide deck and professional app update are ready! I have designed the presentation to be board-room ready, highlighting the technical and artistic success of your project. Let me know if you want to adjust any specific visual details.
