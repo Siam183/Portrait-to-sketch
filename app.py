@@ -15,21 +15,24 @@ st.set_page_config(
 # --- Model Loading ---
 @st.cache_resource
 def load_gen_model():
-    # Load the generator file you uploaded to LFS
+    # compile=False is safer for custom GAN models
     model = load_model('g_model_100.h5', compile=False)
     return model
 
-# --- Image Processing Functions ---
+# --- Updated Image Processing Functions ---
 def preprocess_image(image, target_size=(256, 256)):
     img = image.resize(target_size)
     img_array = np.array(img).astype(np.float32)
-    # Standard Pix2pix normalization: scale [0, 255] to [-1, 1]
-    img_array = (img_array - 127.5) / 127.5
+    
+    # NEW SCALING: Change from [-1, 1] to [0, 1]
+    img_array = img_array / 255.0 
+    
     return np.expand_dims(img_array, axis=0)
 
 def postprocess_output(prediction):
-    # Rescale from [-1, 1] back to [0, 1]
-    rescaled = (prediction[0] + 1) / 2.0
+    # If we changed input to [0, 1], we should ensure output is handled cleanly
+    # Removing the "+1 / 2" logic if the model was trained on 0-1
+    rescaled = prediction[0] 
     return np.clip(rescaled, 0, 1)
 
 # --- Main UI Layout ---
@@ -38,13 +41,12 @@ st.markdown("---")
 
 generator = load_gen_model()
 
-# Sidebar instructions
 with st.sidebar:
     st.header("Instructions")
-    st.write("1. Upload a clear portrait.")
-    st.write("2. Click 'Generate' to see the AI sketch.")
+    st.write("1. Upload a portrait.")
+    st.write("2. Click 'Generate' to see the sketch.")
     st.divider()
-    st.info("Note: This model works best on images with simple backgrounds.")
+    st.info("Trying New Normalization (0-1 Scaling)")
 
 uploaded_file = st.file_uploader("Upload your photo", type=["jpg", "png", "jpeg"])
 
@@ -57,7 +59,7 @@ if uploaded_file is not None:
         st.image(input_image, use_container_width=True)
     
     if st.button("✨ Generate Sketch", use_container_width=True):
-        with st.spinner("AI is drawing..."):
+        with st.spinner("AI is re-calculating..."):
             # Process
             processed_input = preprocess_image(input_image)
             prediction = generator.predict(processed_input)
@@ -73,11 +75,6 @@ if uploaded_file is not None:
                 result_img.save(buf, format="PNG")
                 byte_im = buf.getvalue()
                 
-                st.download_button(
-                    label="Download Result",
-                    data=byte_im,
-                    file_name="sketch_output.png",
-                    mime="image/png"
-                )
+                st.download_button(label="Download Result", data=byte_im, file_name="sketch_output.png", mime="image/png")
 else:
-    st.info("Upload an image to get started.")
+    st.info("Upload an image to test the new scaling.")
